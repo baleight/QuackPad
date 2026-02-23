@@ -12,7 +12,7 @@ data class Attachment(
     val description: String = "",
     val fileName: String = "",
 ) : Parcelable {
-    enum class Type { AUDIO, IMAGE, VIDEO, GENERIC }
+    enum class Type { IMAGE, AUDIO, VIDEO, GENERIC }
 
     fun isEmpty() = path.isEmpty() && description.isEmpty() && fileName.isEmpty()
 }

@@ -36,14 +36,12 @@ import org.koin.androidx.viewmodel.ext.android.viewModel
 import org.qosp.notes.R
 import org.qosp.notes.components.backup.BackupService
 import org.qosp.notes.data.model.Attachment
-import org.qosp.notes.data.model.Notebook
 import org.qosp.notes.data.sync.core.BackendProvider
 import org.qosp.notes.data.sync.fs.StorageConfig
 import org.qosp.notes.data.sync.fs.toFriendlyString
 import org.qosp.notes.data.sync.nextcloud.NextcloudConfig
 import org.qosp.notes.databinding.ActivityMainBinding
 import org.qosp.notes.preferences.CloudService
-import org.qosp.notes.preferences.SortNavdrawerNotebooksMethod
 import org.qosp.notes.ui.attachments.fromUri
 import org.qosp.notes.ui.utils.closeAndThen
 import org.qosp.notes.ui.utils.collect
@@ -61,18 +59,16 @@ class MainActivity : BaseActivity() {
     private val backendProvider by inject<BackendProvider>()
 
     private val topLevelMenu get() = binding.navigationView.menu
-    private val notebooksMenu get() = topLevelMenu.findItem(R.id.menu_notebooks).subMenu
 
     private val primaryDestinations = setOf(
         R.id.fragment_main,
         R.id.fragment_archive,
         R.id.fragment_deleted,
-        R.id.fragment_notebook
+        R.id.fragment_folder
     )
     private val secondaryDestinations = setOf(
         R.id.fragment_about,
         R.id.fragment_editor,
-        R.id.fragment_manage_notebooks,
         R.id.fragment_search,
         R.id.fragment_sync_settings,
         R.id.fragment_settings,
@@ -318,107 +314,30 @@ class MainActivity : BaseActivity() {
                 else -> id
             }
 
-        val arguments = arguments ?: navController.currentBackStackEntry?.arguments
-        val notebookId = arguments?.getLong("notebookId", -1L)?.takeIf { it >= 0L }
-
         binding.navigationView.post {
-            ((notebooksMenu?.children ?: emptySequence()) + topLevelMenu.children)
-                .forEach { item ->
-                    item.isChecked = when (notebookId) {
-                        null -> item.itemId == destinationId
-                        else -> item.itemId == notebookId.toInt()
-                    }
-                }
+            topLevelMenu.children.forEach { item ->
+                item.isChecked = item.itemId == destinationId
+            }
         }
     }
 
     private fun setupDrawerMenuItems() {
         // Alternative of setupWithNavController(), NavigationUI.java
-        // Sets up click listeners for all drawer menu items except from notebooks.
-        // Those are handled in createNotebookMenuItems()
-        (topLevelMenu.children + listOfNotNull(notebooksMenu?.findItem(R.id.fragment_manage_notebooks)))
-            .forEach { item ->
-                if (item.itemId !in primaryDestinations + secondaryDestinations) return@forEach
+        // Sets up click listeners for all drawer menu items.
+        topLevelMenu.children.forEach { item ->
+            if (item.itemId !in primaryDestinations + secondaryDestinations) return@forEach
 
-                item.setOnMenuItemClickListener {
-                    binding.drawer.closeAndThen {
-                        navController.navigateSafely(item.itemId)
-                    }
-                    false // Returning true would cause the menu item to become checked.
-                    // We check the menu items only when the destination changes.
+            item.setOnMenuItemClickListener {
+                binding.drawer.closeAndThen {
+                    navController.navigateSafely(item.itemId)
                 }
+                false // Returning true would cause the menu item to become checked.
+                // We check the menu items only when the destination changes.
             }
-
-        notebooksMenu?.findItem(R.id.nav_default_notebook)?.setOnMenuItemClickListener {
-            binding.drawer.closeAndThen {
-                navController.navigateSafely(
-                    R.id.fragment_notebook,
-                    bundleOf(
-                        "notebookId" to R.id.nav_default_notebook.toLong(),
-                        "notebookName" to getString(R.string.default_notebook),
-                    )
-                )
-            }
-            false // Returning true would cause the menu item to become checked.
-            // We check the menu items only when the destination changes.
         }
     }
 
     private fun setupNavigation() {
-        fun createNotebookMenuItems(notebooks: List<Notebook>) {
-
-            // Obtaining the current setting of notebook sorting order.
-            val sort = runBlocking {
-                return@runBlocking preferenceRepository
-                    .getAll()
-                    .map { it.sortNavdrawerNotebooksMethod }
-                    .first()
-                    .name
-            }
-
-            // Sorting the notebooks.
-            val sortedNotebooks: List<Notebook> = when (sort) {
-                SortNavdrawerNotebooksMethod.CREATION_ASC.name -> notebooks.sortedBy { it.id }
-                SortNavdrawerNotebooksMethod.CREATION_DESC.name -> notebooks.sortedByDescending { it.id }
-                SortNavdrawerNotebooksMethod.TITLE_ASC.name -> notebooks.sortedBy { it.name }
-                SortNavdrawerNotebooksMethod.TITLE_DESC.name -> notebooks.sortedByDescending { it.name }
-                else -> notebooks.sortedBy { it.name }
-            }
-
-            // Displaying the notebooks.
-            sortedNotebooks.forEach { notebook ->
-                val menuItem = notebooksMenu?.findItem(notebook.id.toInt())
-                if (menuItem != null && notebook.name != menuItem.title) {
-                    menuItem.title = notebook.name
-                }
-                if (menuItem == null) {
-                    notebooksMenu?.add(
-                        R.id.section_notebooks,
-                        notebook.id.toInt(),
-                        0,
-                        notebook.name
-                    )
-                        ?.setIcon(R.drawable.ic_notebook)
-                        ?.setCheckable(true)
-                        ?.setOnMenuItemClickListener {
-                            binding.drawer.closeAndThen {
-                                navController.navigateSafely(
-                                    R.id.fragment_notebook,
-                                    bundleOf(
-                                        "notebookId" to notebook.id,
-                                        "notebookName" to notebook.name,
-                                    )
-                                )
-                            }
-                            false // Returning true would cause the menu item to become checked.
-                            // We check the menu items only when the destination changes.
-                        }
-                }
-            }
-
-            selectCurrentDestinationMenuItem()
-        }
-
         appBarConfiguration = AppBarConfiguration(
             primaryDestinations,
             binding.drawer
@@ -428,37 +347,13 @@ class MainActivity : BaseActivity() {
             (supportFragmentManager.findFragmentById(R.id.nav_host_fragment) as NavHostFragment).navController
 
         setupDrawerMenuItems()
+        selectCurrentDestinationMenuItem()
 
         navController.addOnDestinationChangedListener { controller, destination, arguments ->
             currentFocus?.hideKeyboard()
             selectCurrentDestinationMenuItem(destination.id, arguments)
 
             setDrawerEnabled(destination.id != R.id.fragment_editor)
-        }
-
-        activityModel.notebooks.collect(this) { (showDefaultNotebook, notebooks) ->
-            val notebookIds = (notebooks.map { it.id.toInt() } + R.id.nav_default_notebook).toSet()
-
-            // Remove deleted notebooks from the menu
-            (primaryDestinations + secondaryDestinations + notebookIds).let { dests ->
-                notebooksMenu?.let { nbMenu ->
-                    var index = 0
-                    while (index < nbMenu.size) {
-                        val item = nbMenu[index]
-                        if (item.itemId !in dests) nbMenu.removeItem(item.itemId) else index++
-                    }
-                }
-            }
-
-            createNotebookMenuItems(notebooks)
-
-            val defaultTitle = getString(R.string.default_notebook)
-            notebooksMenu?.findItem(R.id.nav_default_notebook)?.apply {
-                isVisible = showDefaultNotebook
-                title =
-                    defaultTitle + " (${getString(R.string.default_string)})".takeIf { notebooks.any { it.name == defaultTitle } }
-                        .orEmpty()
-            }
         }
     }
 

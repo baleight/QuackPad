@@ -20,6 +20,9 @@ object DatabaseModule {
                 .addMigrations(AppDatabase.MIGRATION_2_3)
                 .addMigrations(AppDatabase.MIGRATION_3_4)
                 .addMigrations(AppDatabase.MIGRATION_4_5)
+                .addMigrations(AppDatabase.MIGRATION_5_6)
+                .addMigrations(AppDatabase.MIGRATION_6_7)
+                .addMigrations(AppDatabase.MIGRATION_5_7)
                 .build()
         }
 
@@ -27,7 +30,7 @@ object DatabaseModule {
             get<AppDatabase>().noteDao
         }
         single {
-            get<AppDatabase>().notebookDao
+            get<AppDatabase>().folderDao
         }
         single {
             get<AppDatabase>().tagDao

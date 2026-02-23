@@ -43,8 +43,6 @@ open class MainFragment : AbstractNotesFragment(R.layout.fragment_main) {
     override val currentDestinationId: Int = R.id.fragment_main
     override val model: MainViewModel by viewModel()
 
-    open val notebookId: Long? = null
-
     private val chooseFileLauncher = registerForActivityResult(ChooseFilesContract) { uris ->
         if (uris.isEmpty()) return@registerForActivityResult
 
@@ -93,7 +91,6 @@ open class MainFragment : AbstractNotesFragment(R.layout.fragment_main) {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        model.initialize(notebookId)
 
         setupFab()
         setupBottomAppBar()
@@ -143,7 +140,6 @@ open class MainFragment : AbstractNotesFragment(R.layout.fragment_main) {
             .setNoteId(noteId)
             .setNewNoteAttachments(attachments.toTypedArray())
             .setNewNoteIsList(isList)
-            .setNewNoteNotebookId(notebookId ?: 0L)
 
     open fun actionToSearch(searchQuery: String = ""): NavDirections =
         MainFragmentDirections.actionMainToSearch().setSearchQuery(searchQuery)

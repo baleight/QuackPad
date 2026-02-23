@@ -1,5 +1,6 @@
 package org.qosp.notes.ui.editor
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
@@ -15,13 +16,14 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.msoul.datastore.defaultOf
+import org.qosp.notes.components.ImageStorageManager
 import org.qosp.notes.data.model.Attachment
+import org.qosp.notes.data.model.FolderEntity
 import org.qosp.notes.data.model.Note
 import org.qosp.notes.data.model.NoteColor
 import org.qosp.notes.data.model.NoteTask
-import org.qosp.notes.data.model.Notebook
+import org.qosp.notes.data.repo.FolderRepository
 import org.qosp.notes.data.repo.NoteRepository
-import org.qosp.notes.data.repo.NotebookRepository
 import org.qosp.notes.preferences.DateFormat
 import org.qosp.notes.preferences.DefaultEditorMode
 import org.qosp.notes.preferences.MoveCheckedItems
@@ -35,8 +37,9 @@ import java.time.Instant
 
 class EditorViewModel(
     private val noteRepository: NoteRepository,
-    private val notebookRepository: NotebookRepository,
+    private val folderRepository: FolderRepository,
     private val preferenceRepository: PreferenceRepository,
+    private val imageStorageManager: ImageStorageManager,
 ) : ViewModel() {
 
     var inEditMode: Boolean = false
@@ -50,11 +53,11 @@ class EditorViewModel(
         .flatMapLatest { noteRepository.getById(it) }
         .filterNotNull()
         .flatMapLatest { note ->
-            getNotebookData(note.notebookId).flatMapLatest { notebook ->
+            getFolderData(note.folderId).flatMapLatest { folder ->
                 preferenceRepository.getAll().map { prefs ->
                     Data(
                         note = note,
-                        notebook = notebook,
+                        folder = folder,
                         dateTimeFormats = prefs.dateFormat to prefs.timeFormat,
                         openMediaInternally = prefs.openMediaIn == OpenMediaIn.INTERNAL,
                         showDates = prefs.showDate == ShowDate.YES,
@@ -72,8 +75,8 @@ class EditorViewModel(
             initialValue = Data(),
         )
 
-    private fun getNotebookData(notebookId: Long?): Flow<Notebook?> {
-        return notebookId?.let { id -> notebookRepository.getById(id) } ?: flow { emit(null) }
+    private fun getFolderData(folderId: Long?): Flow<FolderEntity?> {
+        return folderId?.let { id -> folderRepository.getFolderById(id) } ?: flow { emit(null) }
     }
 
     fun initialize(
@@ -82,7 +85,7 @@ class EditorViewModel(
         newNoteContent: String,
         newNoteAttachments: List<Attachment>,
         newNoteIsList: Boolean,
-        newNoteNotebookId: Long?,
+        newNoteFolderId: Long?,
     ) {
         viewModelScope.launch {
             val id = withContext(Dispatchers.IO) {
@@ -92,7 +95,7 @@ class EditorViewModel(
                     Note(
                         title = newNoteTitle,
                         content = newNoteContent,
-                        notebookId = newNoteNotebookId,
+                        folderId = newNoteFolderId,
                         isList = newNoteIsList,
                         attachments = newNoteAttachments,
                         isLocalOnly = preferenceRepository.get<NewNotesSyncable>().first() == NewNotesSyncable.NO
@@ -128,6 +131,20 @@ class EditorViewModel(
         )
     }
 
+    fun setEventDate(eventDate: Long?) = update { note ->
+        note.copy(
+            eventDate = eventDate,
+            modifiedDate = Instant.now().epochSecond,
+        )
+    }
+
+    fun setPriority(priority: org.qosp.notes.data.model.NotePriority) = update { note ->
+        note.copy(
+            priority = priority,
+            modifiedDate = Instant.now().epochSecond,
+        )
+    }
+
     fun deleteAttachment(attachment: Attachment) = update { note ->
         note.copy(
             attachments = note.attachments
@@ -142,6 +159,19 @@ class EditorViewModel(
             attachments = note.attachments + attachments,
             modifiedDate = Instant.now().epochSecond,
         )
+    }
+
+    /**
+     * Copies the image at [sourceUri] into internal storage, then returns a Markdown image tag
+     * ready to be inserted into the note content at the cursor position.
+     *
+     * Returns `null` if the copy fails.
+     */
+    suspend fun insertImageFromUri(sourceUri: Uri): String? = withContext(Dispatchers.IO) {
+        val noteDir = currentNoteDirectory()
+        val pathOrRelative = imageStorageManager.copyImageForNote(sourceUri, noteDir) ?: return@withContext null
+        val name = java.io.File(pathOrRelative).nameWithoutExtension
+        "![$name]($pathOrRelative)"
     }
 
     fun updateTaskList(list: List<NoteTask>) = update { note ->
@@ -169,6 +199,8 @@ class EditorViewModel(
         )
     }
 
+    fun currentNoteDirectory(): java.io.File? = data.value.note?.filePath?.let { java.io.File(it).parentFile }
+
     private inline fun update(crossinline transform: suspend (Note) -> Note) {
         viewModelScope.launch(Dispatchers.IO) {
             val note = data.value.note ?: return@launch
@@ -179,7 +211,7 @@ class EditorViewModel(
 
     data class Data(
         val note: Note? = null,
-        val notebook: Notebook? = null,
+        val folder: FolderEntity? = null,
         val dateTimeFormats: Pair<DateFormat, TimeFormat> = defaultOf<DateFormat>() to defaultOf<TimeFormat>(),
         val openMediaInternally: Boolean = true,
         val showDates: Boolean = true,

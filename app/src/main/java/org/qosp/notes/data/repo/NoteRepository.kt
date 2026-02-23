@@ -18,15 +18,19 @@ interface NoteRepository {
     suspend fun permanentlyDeleteNotesInBin()
 
     suspend fun syncNotes(): BaseResult
+    fun getNotesWithDate(): Flow<List<Note>>
+    fun getNotesInRange(startDay: Long, endDay: Long): Flow<List<Note>>
+    fun getNotesForDay(day: Long): Flow<List<Note>>
+
     fun getById(noteId: Long): Flow<Note?>
     fun getDeleted(sortMethod: SortMethod = defaultOf()): Flow<List<Note>>
     fun getArchived(sortMethod: SortMethod = defaultOf()): Flow<List<Note>>
     fun getNonDeleted(sortMethod: SortMethod = defaultOf()): Flow<List<Note>>
     fun getNonDeletedOrArchived(sortMethod: SortMethod = defaultOf()): Flow<List<Note>>
     fun getAll(sortMethod: SortMethod = defaultOf()): Flow<List<Note>>
-    fun getByNotebook(notebookId: Long, sortMethod: SortMethod = defaultOf()): Flow<List<Note>>
+    fun getByFolder(folderId: Long, sortMethod: SortMethod = defaultOf()): Flow<List<Note>>
+    fun getNotesAtRoot(sortMethod: SortMethod = defaultOf()): Flow<List<Note>>
     fun getNonRemoteNotes(provider: CloudService, sortMethod: SortMethod = defaultOf()): Flow<List<Note>>
-    fun getNotesWithoutNotebook(sortMethod: SortMethod = defaultOf()): Flow<List<Note>>
     suspend fun getNotesByCloudService(provider: CloudService): Map<IdMapping, Note?>
     suspend fun deleteIdMappingsForCloudService(cloudService: CloudService)
 }

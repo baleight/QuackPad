@@ -25,7 +25,7 @@ fun SyncNote.toLocalNote(defaultPinned: Boolean) = Note(
     content = content ?: "",
     isPinned = favorite ?: defaultPinned,
     modifiedDate = lastModified,
-    notebookId = null, // TODO: Handle category to notebook conversion if needed
+    folderId = null, // TODO: Handle category to folder conversion if needed
     isMarkdownEnabled = true // Default to Markdown enabled
 )
 

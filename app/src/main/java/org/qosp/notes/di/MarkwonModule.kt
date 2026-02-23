@@ -39,11 +39,12 @@ import org.qosp.notes.ui.utils.resolveAttribute
 object MarkwonModule {
 
     val markwonModule = module {
-        factory<Markwon> { getMarkwon(context = androidContext(), preferenceRepository = get()) }
-        factory<MarkwonEditor> { getMarkWonEditor(markwon = get()) }
+        factory<Markwon> { (noteDirectoryProvider: () -> java.io.File?) -> getMarkwon(context = androidContext(), preferenceRepository = get(), noteDirectoryProvider = noteDirectoryProvider) }
+        factory<MarkwonEditor> { (markwon: Markwon) -> getMarkWonEditor(markwon = markwon) }
     }
 
-    private fun getMarkwon(context: Context, preferenceRepository: PreferenceRepository): Markwon = builder(context)
+    private fun getMarkwon(context: Context, preferenceRepository: PreferenceRepository, noteDirectoryProvider: () -> java.io.File?): Markwon = builder(context)
+        .usePlugin(org.qosp.notes.ui.editor.markdown.RelativeImagePathPlugin(noteDirectoryProvider))
         .usePlugin(LinkifyPlugin.create(EMAIL_ADDRESSES or WEB_URLS))
         .usePlugin(SoftBreakAddsNewLinePlugin.create())
         .usePlugin(MovementMethodPlugin.create(getInstance()))

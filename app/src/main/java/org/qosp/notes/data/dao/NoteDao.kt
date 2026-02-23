@@ -68,6 +68,15 @@ interface NoteDao {
     )
     fun rawGetQuery(query: SimpleSQLiteQuery): Flow<List<Note>>
 
+    @Query("SELECT * FROM notes WHERE eventDate IS NOT NULL AND isDeleted = 0 AND isArchived = 0 ORDER BY eventDate DESC")
+    fun getNotesWithDate(): Flow<List<Note>>
+
+    @Query("SELECT * FROM notes WHERE eventDate BETWEEN :startDay AND :endDay AND isDeleted = 0 AND isArchived = 0")
+    fun getNotesInRange(startDay: Long, endDay: Long): Flow<List<Note>>
+
+    @Query("SELECT * FROM notes WHERE eventDate = :day AND isDeleted = 0 AND isArchived = 0 ORDER BY priority DESC")
+    fun getNotesForDay(day: Long): Flow<List<Note>>
+
     fun getNonRemoteNotes(sortMethod: SortMethod, provider: CloudService): Flow<List<Note>> {
         val (column, order) = getOrderByMethod(sortMethod)
         return rawGetQuery(
@@ -154,12 +163,12 @@ interface NoteDao {
         )
     }
 
-    fun getByNotebook(notebookId: Long, sortMethod: SortMethod): Flow<List<Note>> {
+    fun getByFolder(folderId: Long, sortMethod: SortMethod): Flow<List<Note>> {
         val (column, order) = getOrderByMethod(sortMethod)
         return rawGetQuery(
             SimpleSQLiteQuery(
                 """
-                SELECT * FROM notes WHERE isArchived = 0 AND isDeleted = 0 AND notebookId = $notebookId
+                SELECT * FROM notes WHERE isArchived = 0 AND isDeleted = 0 AND folderId = $folderId
                 ORDER BY isPinned DESC, $column $order
             """
             )
@@ -179,12 +188,12 @@ interface NoteDao {
         return Pair(column, order)
     }
 
-    fun getNotesWithoutNotebook(sortMethod: SortMethod): Flow<List<Note>> {
+    fun getNotesAtRoot(sortMethod: SortMethod): Flow<List<Note>> {
         val (column, order) = getOrderByMethod(sortMethod)
         return rawGetQuery(
             SimpleSQLiteQuery(
                 """
-                SELECT * FROM notes WHERE isArchived = 0 AND isDeleted = 0 AND notebookId IS NULL
+                SELECT * FROM notes WHERE isArchived = 0 AND isDeleted = 0 AND folderId IS NULL
                 ORDER BY isPinned DESC, $column $order
             """
             )

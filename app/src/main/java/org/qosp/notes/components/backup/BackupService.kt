@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 import org.qosp.notes.App
 import org.qosp.notes.R
+import org.qosp.notes.components.ImageStorageManager
 import org.qosp.notes.data.model.Note
 import org.qosp.notes.preferences.BackupStrategy
 import org.qosp.notes.preferences.PreferenceRepository
@@ -34,6 +35,7 @@ class BackupService : LifecycleService() {
 
     val preferenceRepository: PreferenceRepository by inject()
     val backupManager: BackupManager by inject()
+    val imageStorageManager: ImageStorageManager by inject()
 
     private var notificationManager: NotificationManager? = null
 
@@ -99,6 +101,11 @@ class BackupService : LifecycleService() {
             attachmentHandler = handler
         )
 
+        // Collect inline image paths from all notes in the backup
+        val inlineImagePaths = backup.notes
+            .flatMap { imageStorageManager.parseImagePaths(it.content) }
+            .distinct()
+
         val notificationId = nextId
         val notificationBuilder = NotificationCompat.Builder(applicationContext, App.BACKUPS_CHANNEL_ID)
             .setOnlyAlertOnce(true)
@@ -145,7 +152,8 @@ class BackupService : LifecycleService() {
             backup.serialize(),
             handler,
             outputUri,
-            progressHandler
+            progressHandler,
+            inlineImagePaths = inlineImagePaths,
         )
     }
 

@@ -29,7 +29,6 @@ fun Attachment.Companion.fromUri(context: Context, uri: Uri): Attachment {
     val mimeType = context.contentResolver.getType(uri)
     val description = getAttachmentFilename(context, uri) ?: ""
     val type = if (mimeType == null) Attachment.Type.GENERIC else when {
-        mimeType.startsWith("image") -> Attachment.Type.IMAGE
         mimeType.startsWith("video") -> Attachment.Type.VIDEO
         mimeType.startsWith("audio") -> Attachment.Type.AUDIO
         else -> Attachment.Type.GENERIC

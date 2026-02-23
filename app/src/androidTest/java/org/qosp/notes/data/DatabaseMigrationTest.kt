@@ -41,7 +41,8 @@ class DatabaseMigrationTest {
                 AppDatabase.MIGRATION_1_2,
                 AppDatabase.MIGRATION_2_3,
                 AppDatabase.MIGRATION_3_4,
-                AppDatabase.MIGRATION_4_5
+                AppDatabase.MIGRATION_4_5,
+                AppDatabase.MIGRATION_5_6
             )
             .build()
 
@@ -164,6 +165,29 @@ class DatabaseMigrationTest {
         db.openHelper.writableDatabase
 
         // Close the database
+        db.close()
+    }
+
+    /**
+     * Tests the migration from version 5 to version 6.
+     *
+     * This migration introduces the new Folder system by:
+     * - Dropping the old 'notebooks' table
+     * - Creating the new 'folders' table with parentId and absolutePath
+     * - Adding 'folderId' and 'filePath' columns to the 'notes' table
+     */
+    @Test
+    @Throws(IOException::class)
+    fun testMigration5To6() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val db = Room.databaseBuilder(
+            context,
+            AppDatabase::class.java,
+            "migration-5-6-test"
+        )
+            .addMigrations(AppDatabase.MIGRATION_5_6)
+            .build()
+        db.openHelper.writableDatabase
         db.close()
     }
 }

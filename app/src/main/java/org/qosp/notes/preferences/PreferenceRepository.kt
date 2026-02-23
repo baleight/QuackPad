@@ -37,7 +37,6 @@ class PreferenceRepository(
                     colorScheme = prefs.getEnum(),
                     sortMethod = prefs.getEnum(),
                     sortTagsMethod = prefs.getEnum(),
-                    sortNavdrawerNotebooksMethod = prefs.getEnum(),
                     backupStrategy = prefs.getEnum(),
                     noteDeletionTime = prefs.getEnum(),
                     dateFormat = prefs.getEnum(),
@@ -65,6 +64,10 @@ class PreferenceRepository(
             sharedPreferences.getString(key).setAndCommit(value)
         }
     }
+
+    fun getNotesRootDirectory(): Flow<String> = sharedPreferences.getString("NOTES_ROOT_DIRECTORY", "").asFlow()
+
+    suspend fun setNotesRootDirectory(path: String) = sharedPreferences.getString("NOTES_ROOT_DIRECTORY").setAndCommit(path)
 
     suspend fun <T> set(preference: T) where T : Enum<T>, T : EnumPreference = dataStore.setEnum(preference)
 

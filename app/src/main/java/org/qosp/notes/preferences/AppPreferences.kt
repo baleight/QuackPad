@@ -9,7 +9,6 @@ data class AppPreferences(
     val colorScheme: ColorScheme = defaultOf(),
     val sortMethod: SortMethod = defaultOf(),
     val sortTagsMethod: SortTagsMethod = defaultOf(),
-    val sortNavdrawerNotebooksMethod: SortNavdrawerNotebooksMethod = defaultOf(),
     val backupStrategy: BackupStrategy = defaultOf(),
     val noteDeletionTime: NoteDeletionTime = defaultOf(),
     val dateFormat: DateFormat = defaultOf(),
@@ -25,5 +24,5 @@ data class AppPreferences(
     val syncMode: SyncMode = defaultOf(),
     val backgroundSync: BackgroundSync = defaultOf(),
     val newNotesSyncable: NewNotesSyncable = defaultOf(),
-    val trustSelfSignedCertificate: TrustSelfSignedCertificate = defaultOf(),
+    val trustSelfSignedCertificate: TrustSelfSignedCertificate = defaultOf()
 )

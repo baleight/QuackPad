@@ -1,7 +1,9 @@
 package org.qosp.notes.ui.settings
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.View
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.appcompat.widget.Toolbar
 import androidx.lifecycle.lifecycleScope
@@ -45,17 +47,24 @@ class SettingsFragment : BaseFragment(resId = R.layout.fragment_settings) {
         (activity as MainActivity).restoreNotes(uri)
     }
 
+    private val openDocumentTreeLauncher = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri == null) return@registerForActivityResult
+        val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+        requireContext().contentResolver.takePersistableUriPermission(uri, flags)
+        val path = uri.toString()
+        model.setNotesRootDirectory(path)
+    }
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         setupPreferenceObservers()
+        setupNotesRootListener()
         setupColorSchemeListener()
         setupThemeModeListener()
         setupDarkThemeModeListener()
         setupLayoutModeListener()
         setupSortMethodListener()
         setupSortTagsMethodListener()
-        setupSortNavdrawerMethodListener()
-        setupGroupNotesWithoutNotebookListener()
         setupMoveCheckedItemsListener()
         setupOpenMediaInListener()
         setupNoteDeletionTimeListener()
@@ -99,12 +108,10 @@ class SettingsFragment : BaseFragment(resId = R.layout.fragment_settings) {
                 )
                 binding.settingSortMethod.subText = getString(sortMethod.nameResource)
                 binding.settingSortTagsMethod.subText = getString(sortTagsMethod.nameResource)
-                binding.settingSortNavdrawerMethod.subText = getString(sortNavdrawerNotebooksMethod.nameResource)
+                
                 binding.settingBackupStrategy.subText = getString(backupStrategy.nameResource)
                 binding.settingOpenMedia.subText = getString(openMediaIn.nameResource)
                 binding.settingNoteDeletion.subText = getString(noteDeletionTime.nameResource)
-
-                binding.settingGroupNotesWithoutNotebook.subText = getString(groupNotesWithoutNotebook.nameResource)
                 binding.settingMoveCheckedItems.subText = getString(moveCheckedItems.nameResource)
                 binding.settingShowDate.subText = getString(showDate.nameResource)
                 binding.settingFontSize.subText = getString(editorFontSize.nameResource)
@@ -124,10 +131,20 @@ class SettingsFragment : BaseFragment(resId = R.layout.fragment_settings) {
 
             }
         }
+
+        lifecycleScope.launch {
+            model.notesRootDirectory.collect { path ->
+                binding.settingNotesRoot.subText = path.ifEmpty { getString(R.string.preferences_go_to_sync_settings) }
+            }
+        }
     }
 
     private fun setupSyncSettingsListener() = binding.settingGoToSyncSettings.setOnClickListener {
         findNavController().navigateSafely(SettingsFragmentDirections.actionMainSettingsToSync())
+    }
+
+    private fun setupNotesRootListener() = binding.settingNotesRoot.setOnClickListener {
+        openDocumentTreeLauncher.launch(null)
     }
 
     private fun setupColorSchemeListener() = binding.settingColorScheme.setOnClickListener {
@@ -182,24 +199,8 @@ class SettingsFragment : BaseFragment(resId = R.layout.fragment_settings) {
         }
     }
 
-    /* Changes the sorting method of notebooks list in the navigation drawer. */
-    private fun setupSortNavdrawerMethodListener() = binding.settingSortNavdrawerMethod.setOnClickListener {
-        showPreferenceDialog(R.string.preferences_sort_navdrawer_method, appPreferences.sortNavdrawerNotebooksMethod) { selected ->
-            model.setPreference(selected)
-        }
-    }
-
     private fun setupBackupStrategyListener() = binding.settingBackupStrategy.setOnClickListener {
         showPreferenceDialog(R.string.preferences_backup_strategy, appPreferences.backupStrategy) { selected ->
-            model.setPreference(selected)
-        }
-    }
-
-    private fun setupGroupNotesWithoutNotebookListener() = binding.settingGroupNotesWithoutNotebook.setOnClickListener {
-        showPreferenceDialog(
-            R.string.preferences_group_notes_without_notebook,
-            appPreferences.groupNotesWithoutNotebook
-        ) { selected ->
             model.setPreference(selected)
         }
     }

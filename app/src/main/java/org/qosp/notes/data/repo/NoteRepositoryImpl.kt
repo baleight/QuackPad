@@ -42,8 +42,12 @@ class NoteRepositoryImpl(
     private val synchronizeNotes: SynchronizeNotes,
     private val processRemoteActions: ProcessRemoteActions,
     private val syncingScope: SyncScope,
-    private val toaster: Toaster
+    private val toaster: Toaster,
+    private val imageStorageManager: org.qosp.notes.components.ImageStorageManager,
 ) : NoteRepository {
+
+    override fun getNonRemoteNotes(provider: CloudService, sortMethod: SortMethod): kotlinx.coroutines.flow.Flow<List<org.qosp.notes.data.model.Note>> =
+        noteDao.getNonRemoteNotes(sortMethod, provider)
 
     private val tag = NoteRepositoryImpl::class.java.simpleName
 
@@ -227,6 +231,11 @@ class NoteRepositoryImpl(
 
     override suspend fun deleteNotes(vararg notes: Note, sync: Boolean) {
         Log.d(tag, "deleteNotes: Permanently deleting ${notes.size} notes")
+        // Delete inline images embedded in note content before removing DB rows
+        notes.forEach { note ->
+            val noteDir = note.filePath?.let { java.io.File(it).parentFile }
+            imageStorageManager.deleteImagesReferencedIn(note.content, noteDir)
+        }
         val array = notes.map { it.toEntity() }.toTypedArray()
         noteDao.delete(*array)
         if (sync) notes.filterNot { it.isLocalOnly }.forEach {
@@ -242,10 +251,25 @@ class NoteRepositoryImpl(
     }
 
     override suspend fun permanentlyDeleteNotesInBin() {
-        val noteIds = noteDao.getDeleted(defaultOf()).first().map { it.id }.toLongArray()
-        Log.d(tag, "permanentlyDeleteNotesInBin: Permanently deleting ${noteIds.size} notes from bin")
+        val notesInBin = noteDao.getDeleted(defaultOf()).first()
+        Log.d(tag, "permanentlyDeleteNotesInBin: Permanently deleting ${notesInBin.size} notes from bin")
+        // Delete inline images referenced in each note's content
+        notesInBin.forEach { imageStorageManager.deleteImagesReferencedIn(it.content) }
+        val noteIds = notesInBin.map { it.id }.toLongArray()
         idMappingDao.deleteByLocalId(*noteIds)
         noteDao.permanentlyDeleteNotesInBin()
+    }
+
+    override fun getNotesWithDate(): Flow<List<Note>> {
+        return noteDao.getNotesWithDate()
+    }
+
+    override fun getNotesInRange(startDay: Long, endDay: Long): Flow<List<Note>> {
+        return noteDao.getNotesInRange(startDay, endDay)
+    }
+
+    override fun getNotesForDay(day: Long): Flow<List<Note>> {
+        return noteDao.getNotesForDay(day)
     }
 
     override fun getById(noteId: Long): Flow<Note?> {
@@ -272,16 +296,12 @@ class NoteRepositoryImpl(
         return noteDao.getAll(sortMethod)
     }
 
-    override fun getByNotebook(notebookId: Long, sortMethod: SortMethod): Flow<List<Note>> {
-        return noteDao.getByNotebook(notebookId, sortMethod)
+    override fun getByFolder(folderId: Long, sortMethod: SortMethod): Flow<List<Note>> {
+        return noteDao.getByFolder(folderId, sortMethod)
     }
 
-    override fun getNonRemoteNotes(provider: CloudService, sortMethod: SortMethod): Flow<List<Note>> {
-        return noteDao.getNonRemoteNotes(sortMethod, provider)
-    }
-
-    override fun getNotesWithoutNotebook(sortMethod: SortMethod): Flow<List<Note>> {
-        return noteDao.getNotesWithoutNotebook(sortMethod)
+    override fun getNotesAtRoot(sortMethod: SortMethod): Flow<List<Note>> {
+        return noteDao.getNotesAtRoot(sortMethod)
     }
 
     override suspend fun getNotesByCloudService(provider: CloudService): Map<IdMapping, Note?> {

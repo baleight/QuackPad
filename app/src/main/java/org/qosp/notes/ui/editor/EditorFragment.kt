@@ -76,7 +76,6 @@ import org.qosp.notes.ui.attachments.recycler.AttachmentsGridManager
 import org.qosp.notes.ui.attachments.uri
 import org.qosp.notes.ui.common.BaseDialog
 import org.qosp.notes.ui.common.BaseFragment
-import org.qosp.notes.ui.common.showMoveToNotebookDialog
 import org.qosp.notes.ui.editor.dialog.InsertHyperlinkDialog
 import org.qosp.notes.ui.editor.dialog.InsertImageDialog
 import org.qosp.notes.ui.editor.dialog.InsertTableDialog
@@ -141,9 +140,9 @@ class EditorFragment : BaseFragment(R.layout.fragment_editor) {
     private lateinit var attachmentsAdapter: AttachmentsAdapter
     private lateinit var tasksAdapter: TasksAdapter
 
-    val markwon: Markwon by inject()
+    val markwon: Markwon by inject { org.koin.core.parameter.parametersOf({ model.currentNoteDirectory() }) }
 
-    val markwonEditor: MarkwonEditor by inject()
+    val markwonEditor: MarkwonEditor by inject { org.koin.core.parameter.parametersOf(markwon) }
 
     override val hasDefaultAnimation = false
     override val toolbar: Toolbar
@@ -152,19 +151,45 @@ class EditorFragment : BaseFragment(R.layout.fragment_editor) {
     private val requestMediaLauncher = registerForActivityResult(ChooseFilesContract) { uris ->
         if (uris.isEmpty()) return@registerForActivityResult
 
-        val attachments = uris.map {
-            requireContext().contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            Attachment.fromUri(requireContext(), it)
+        val imageUris = uris.filter {
+            requireContext().contentResolver.getType(it)?.startsWith("image") == true
+        }
+        val otherUris = uris.filter {
+            requireContext().contentResolver.getType(it)?.startsWith("image") != true
         }
 
-        model.insertAttachments(*attachments.toTypedArray())
+        // Images go into the note content as Markdown tags
+        if (imageUris.isNotEmpty()) {
+            lifecycleScope.launch {
+                imageUris.forEach { uri ->
+                    val snippet = model.insertImageFromUri(uri) ?: return@forEach
+                    val editText = binding.editTextContent
+                    editText.text?.insert(editText.selectionStart, snippet + "\n")
+                }
+            }
+        }
+
+        // Non-image media keeps the existing attachment flow
+        if (otherUris.isNotEmpty()) {
+            val attachments = otherUris.map {
+                requireContext().contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                Attachment.fromUri(requireContext(), it)
+            }
+            model.insertAttachments(*attachments.toTypedArray())
+        }
     }
 
     private val takePhotoLauncher = registerForActivityResult(TakePictureContract) { saved ->
         if (!saved) return@registerForActivityResult
         val uri = activityModel.tempPhotoUri ?: return@registerForActivityResult
 
-        model.insertAttachments(Attachment.fromUri(requireContext(), uri))
+        lifecycleScope.launch {
+            val snippet = model.insertImageFromUri(uri)
+            if (snippet != null) {
+                val editText = binding.editTextContent
+                editText.text?.insert(editText.selectionStart, snippet + "\n")
+            }
+        }
         activityModel.tempPhotoUri = null
     }
 
@@ -303,7 +328,7 @@ class EditorFragment : BaseFragment(R.layout.fragment_editor) {
                 newNoteContent = args.newNoteContent,
                 newNoteAttachments = args.newNoteAttachments?.toList() ?: emptyList(),
                 newNoteIsList = args.newNoteIsList,
-                newNoteNotebookId = args.newNoteNotebookId.takeIf { it > 0L }
+                newNoteFolderId = args.newNoteFolderId.takeIf { it >= 0L }
             )
         }
 
@@ -873,14 +898,14 @@ class EditorFragment : BaseFragment(R.layout.fragment_editor) {
 
             setupMenuItems(data.note, data.note.reminders.isNotEmpty())
 
-            // Update notebook indicator
+            // Update folder indicator
             notebookView.setCompoundDrawablesRelativeWithIntrinsicBounds(
-                requireContext().getDrawableCompat(R.drawable.ic_notebook),
+                requireContext().getDrawableCompat(R.drawable.ic_manage_notebooks),
                 null,
-                requireContext().getDrawableCompat(if (data.notebook == null) R.drawable.ic_add else R.drawable.ic_swap),
+                requireContext().getDrawableCompat(if (data.folder == null) R.drawable.ic_add else R.drawable.ic_swap),
                 null
             )
-            notebookView.text = data.notebook?.name ?: getString(R.string.notebooks_unassigned)
+            notebookView.text = data.folder?.name ?: getString(R.string.notebooks_unassigned)
 
             // Update fragment background colour
             data.note.color.resId(requireContext())?.let { resId ->
@@ -942,6 +967,20 @@ class EditorFragment : BaseFragment(R.layout.fragment_editor) {
                         text = "# ${tag.name}"
                     }
                 )
+            }
+
+            if (data.note.eventDate != null) {
+                val date = java.time.LocalDate.ofEpochDay(data.note.eventDate)
+                chipEventDate.text = "📅 " + date.format(java.time.format.DateTimeFormatter.ofPattern("MMM d, yyyy"))
+                chipEventDate.isCloseIconVisible = true
+            } else {
+                chipEventDate.text = "📅 No date"
+                chipEventDate.isCloseIconVisible = false
+            }
+            
+            val priorityIndex = data.note.priority.ordinal
+            if (spinnerPriority.selectedItemPosition != priorityIndex) {
+                 spinnerPriority.setSelection(priorityIndex)
             }
 
             isFirstLoad = false
@@ -1018,12 +1057,42 @@ class EditorFragment : BaseFragment(R.layout.fragment_editor) {
         }
 
         notebookView.setOnClickListener {
-            data.note?.let { showMoveToNotebookDialog(it) }
+            // TODO: implement folder picker dialog
         }
 
         actionAddTask.setOnClickListener {
             // Always add new tasks at the top (position 0)
             addTask(0)
+        }
+
+        val priorityOptions = listOf("⚪ None", "🟢 Low", "🟡 Medium", "🔴 High")
+        val adapter = android.widget.ArrayAdapter(requireContext(), android.R.layout.simple_spinner_dropdown_item, priorityOptions)
+        spinnerPriority.adapter = adapter
+        
+        spinnerPriority.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+             override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, position: Int, id: Long) {
+                 if (data.note?.priority?.ordinal != position) {
+                     model.setPriority(org.qosp.notes.data.model.NotePriority.values()[position])
+                 }
+             }
+             override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
+        }
+        
+        chipEventDate.setOnClickListener {
+             val picker = com.google.android.material.datepicker.MaterialDatePicker.Builder.datePicker()
+                 .setTitleText("Select Event Date")
+                 .setSelection(data.note?.eventDate?.let { it * 24 * 60 * 60 * 1000 } ?: com.google.android.material.datepicker.MaterialDatePicker.todayInUtcMilliseconds())
+                 .build()
+                 
+             picker.addOnPositiveButtonClickListener { selection ->
+                 val days = selection / (24 * 60 * 60 * 1000)
+                 model.setEventDate(days)
+             }
+             picker.show(parentFragmentManager, "date_picker")
+        }
+        
+        chipEventDate.setOnCloseIconClickListener {
+             model.setEventDate(null)
         }
     }
 
@@ -1214,6 +1283,7 @@ class EditorFragment : BaseFragment(R.layout.fragment_editor) {
 
         textViewTitlePreview.isVisible = !model.inEditMode
         editTextTitle.isVisible = model.inEditMode
+        layoutCalendarSelectors.isVisible = model.inEditMode
 
         actionAddTask.isVisible = isList && model.inEditMode
         recyclerTasks.doOnPreDraw {

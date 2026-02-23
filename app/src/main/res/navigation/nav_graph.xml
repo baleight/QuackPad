@@ -44,23 +44,20 @@
     </fragment>
 
     <fragment
-            android:id="@+id/fragment_notebook"
-            android:name="org.qosp.notes.ui.notebooks.NotebookFragment"
-            android:layout="@layout/fragment_main">
+            android:id="@+id/fragment_folder"
+            android:name="org.qosp.notes.ui.folders.FolderFragment"
+            android:label="@string/nav_folders"
+            android:layout="@layout/fragment_folder">
         <action
-                android:id="@+id/action_notebook_to_editor"
+                android:id="@+id/action_folder_to_editor"
                 app:destination="@id/fragment_editor"/>
         <action
-                android:id="@+id/action_notebook_to_search"
+                android:id="@+id/action_folder_to_search"
                 app:destination="@id/fragment_search"/>
         <argument
-                android:name="notebookId"
+                android:name="folderId"
                 app:argType="long"
                 android:defaultValue="-1L"/>
-        <argument
-                android:name="notebookName"
-                app:argType="string"
-                android:defaultValue=""/>
     </fragment>
 
     <fragment
@@ -80,8 +77,8 @@
                 android:name="noteId"
                 android:defaultValue="0L"
                 app:argType="long"/>
-        <argument android:name="newNoteNotebookId"
-                  android:defaultValue="0L"
+        <argument android:name="newNoteFolderId"
+                  android:defaultValue="-1L"
                   app:argType="long"/>
         <argument android:name="newNoteIsList"
                   android:defaultValue="false"
@@ -111,11 +108,7 @@
                 app:argType="long"/>
     </fragment>
 
-    <fragment
-            android:id="@+id/fragment_manage_notebooks"
-            android:name="org.qosp.notes.ui.notebooks.ManageNotebooksFragment"
-            android:layout="@layout/fragment_manage_notebooks">
-    </fragment>
+
 
     <fragment
             android:id="@+id/fragment_about"
@@ -147,4 +140,12 @@
         android:name="org.qosp.notes.ui.sync.SyncSettingsFragment"
         android:layout="@layout/fragment_sync_settings"/>
 
+    <fragment
+        android:id="@+id/fragment_calendar"
+        android:name="org.qosp.notes.ui.calendar.CalendarFragment"
+        android:layout="@layout/fragment_calendar">
+        <action
+            android:id="@+id/action_calendar_to_editor"
+            app:destination="@id/fragment_editor"/>
+    </fragment>
 </navigation>

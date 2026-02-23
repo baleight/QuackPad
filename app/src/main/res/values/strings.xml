@@ -9,6 +9,11 @@
     <string name="nav_all_notes">All Notes</string>
     <string name="nav_notebooks">Notebooks</string>
     <string name="nav_your_notebooks">Your Notebooks</string>
+    <string name="nav_folders">Folders</string>
+    <string name="text_breadcrumb_separator"> \u003E </string>
+    <string name="hint_note_title">Note Title</string>
+    <string name="hint_folder_name">Folder Name</string>
+    <string name="action_rename">Rename</string>
 
     <!-- Preferences -->
     <!-- Preferences / General -->
@@ -165,6 +170,7 @@
     <string name="action_export">Export</string>
     <string name="action_hide">Hide</string>
     <string name="action_show">Show</string>
+    <string name="action_add">Add</string>
     <string name="action_archive">Archive</string>
     <string name="action_change_mode">Edit/View mode</string>
     <string name="action_pin">Pin</string>
@@ -196,6 +202,7 @@
     <string name="notebooks_hint_name">Notebook name</string>
     <string name="notebooks_unassigned">No Notebook</string>
     <string name="indicator_notebook_empty">You have no notebooks.</string>
+    <string name="empty_state_no_folders">You have no folders.</string>
     <string name="action_create_notebook">Create a notebook</string>
     <string name="action_rename_notebook">Rename notebook</string>
     <string name="action_new_notebook">New notebook</string>

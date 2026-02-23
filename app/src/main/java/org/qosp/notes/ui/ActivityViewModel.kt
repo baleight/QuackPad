@@ -19,19 +19,15 @@ import kotlinx.coroutines.withContext
 import me.msoul.datastore.defaultOf
 import org.qosp.notes.components.MediaStorageManager
 import org.qosp.notes.data.model.Note
-import org.qosp.notes.data.model.Notebook
 import org.qosp.notes.data.repo.NoteRepository
-import org.qosp.notes.data.repo.NotebookRepository
 import org.qosp.notes.data.repo.ReminderRepository
 import org.qosp.notes.data.repo.TagRepository
 import org.qosp.notes.data.sync.core.BaseResult
 import org.qosp.notes.di.SyncScope
-import org.qosp.notes.preferences.GroupNotesWithoutNotebook
 import org.qosp.notes.preferences.LayoutMode
 import org.qosp.notes.preferences.NoteDeletionTime
 import org.qosp.notes.preferences.PreferenceRepository
 import org.qosp.notes.preferences.SortMethod
-import org.qosp.notes.preferences.SortNavdrawerNotebooksMethod
 import org.qosp.notes.preferences.SortTagsMethod
 import org.qosp.notes.ui.reminders.ReminderManager
 import org.qosp.notes.ui.utils.Toaster
@@ -39,7 +35,6 @@ import java.time.Instant
 
 class ActivityViewModel(
     private val noteRepository: NoteRepository,
-    private val notebookRepository: NotebookRepository,
     private val preferenceRepository: PreferenceRepository,
     private val reminderRepository: ReminderRepository,
     private val reminderManager: ReminderManager,
@@ -48,18 +43,6 @@ class ActivityViewModel(
     private val syncScope: SyncScope,
     private val toaster: Toaster,
 ) : ViewModel() {
-
-    val notebooks: StateFlow<Pair<Boolean, List<Notebook>>> =
-        preferenceRepository.get<GroupNotesWithoutNotebook>().flatMapLatest { groupNotesWithoutNotebook ->
-            notebookRepository.getAll().map { notebooks ->
-                (groupNotesWithoutNotebook == GroupNotesWithoutNotebook.YES) to notebooks
-            }
-        }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5000),
-                initialValue = (defaultOf<GroupNotesWithoutNotebook>() == GroupNotesWithoutNotebook.YES) to listOf(),
-            )
 
     var showHiddenNotes: Boolean = false
     var notesToBackup: Set<Note>? = null
@@ -119,8 +102,8 @@ class ActivityViewModel(
 
     fun fullPreviewNotes(vararg notes: Note) = update(*notes) { it.copy(isCompactPreview = false) }
 
-    fun moveNotes(notebookId: Long?, vararg notes: Note) =
-        update(*notes) { it.copy(notebookId = notebookId, modifiedDate = Instant.now().epochSecond) }
+    fun moveNotes(folderId: Long?, vararg notes: Note) =
+        update(*notes) { it.copy(folderId = folderId, modifiedDate = Instant.now().epochSecond) }
 
     fun makeNotesSyncable(vararg notes: Note) = update(*notes) { it.copy(isLocalOnly = false) }
 
@@ -170,10 +153,6 @@ class ActivityViewModel(
     }
 
     fun setSortTagsMethod(method: SortTagsMethod) {
-        viewModelScope.launch(Dispatchers.IO) { preferenceRepository.set(method) }
-    }
-
-    fun setSortNavdrawerNotebooksMethod(method: SortNavdrawerNotebooksMethod) {
         viewModelScope.launch(Dispatchers.IO) { preferenceRepository.set(method) }
     }
 

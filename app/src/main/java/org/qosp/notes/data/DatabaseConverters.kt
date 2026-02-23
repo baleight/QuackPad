@@ -5,6 +5,7 @@ import kotlinx.serialization.json.Json
 import org.qosp.notes.data.model.Attachment
 import org.qosp.notes.data.model.NoteColor
 import org.qosp.notes.data.model.NoteTask
+import org.qosp.notes.data.model.NotePriority
 
 object DatabaseConverters {
     @TypeConverter
@@ -24,4 +25,10 @@ object DatabaseConverters {
 
     @TypeConverter
     fun colorEnumFromJson(json: String): NoteColor = Json.decodeFromString(json)
+
+    @TypeConverter
+    fun stringFromPriorityEnum(priority: NotePriority): String = priority.name
+
+    @TypeConverter
+    fun priorityEnumFromString(name: String): NotePriority = NotePriority.valueOf(name)
 }

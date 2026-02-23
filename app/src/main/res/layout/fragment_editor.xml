@@ -134,6 +134,34 @@
                     android:layout_margin="16dp"
                     android:textStyle="italic"/>
 
+            <LinearLayout
+                    android:id="@+id/layout_calendar_selectors"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginHorizontal="16dp"
+                    android:layout_marginBottom="8dp"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:visibility="gone">
+                
+                <com.google.android.material.chip.Chip
+                        android:id="@+id/chip_event_date"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="📅 No date"
+                        app:closeIconVisible="false" />
+
+                <Space
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1" />
+
+                <Spinner
+                        android:id="@+id/spinner_priority"
+                        android:layout_width="wrap_content"
+                        android:layout_height="48dp" />
+            </LinearLayout>
+
             <com.google.android.material.chip.ChipGroup
                     android:id="@+id/container_tags"
                     android:layout_marginHorizontal="16dp"

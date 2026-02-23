@@ -78,7 +78,7 @@ abstract class AbstractNotesFragment(@LayoutRes resId: Int) : BaseFragment(resId
             recyclerAdapter.showHiddenNotes = value
         }
 
-    val markwon: Markwon by inject()
+    val markwon: Markwon by inject { org.koin.core.parameter.parametersOf({ null }) }
 
     // Bug:
     //
@@ -365,7 +365,7 @@ abstract class AbstractNotesFragment(@LayoutRes resId: Int) : BaseFragment(resId
                 }
                 R.id.action_hide_selected -> activityModel.hideNotes(*selectedNotes)
                 R.id.action_duplicate_selected -> activityModel.duplicateNotes(*selectedNotes)
-                R.id.action_move_selected -> showMoveToNotebookDialog(*selectedNotes)
+                
                 R.id.action_export_selected -> {
                     activityModel.notesToBackup = selectedNotes.toSet()
                     exportNotesLauncher.launch(null)
@@ -468,9 +468,7 @@ abstract class AbstractNotesFragment(@LayoutRes resId: Int) : BaseFragment(resId
             action(R.string.action_unarchive, R.drawable.ic_unarchive, condition = note.isArchived) {
                 activityModel.unarchiveNotes(note)
             }
-            action(R.string.action_move_to, R.drawable.ic_notebook_swap, condition = isNormal) {
-                showMoveToNotebookDialog(note)
-            }
+            
             action(R.string.action_delete, R.drawable.ic_bin, condition = !note.isDeleted) {
                 activityModel.deleteNotes(note)
                 lifecycleScope.launch {

@@ -21,6 +21,11 @@ class SettingsViewModel(
 
     val appPreferences = preferenceRepository.getAll()
     val loggedInUsername = NextcloudConfig.fromPreferences(preferenceRepository).map { it?.username }
+    val notesRootDirectory = preferenceRepository.getNotesRootDirectory()
+
+    fun setNotesRootDirectory(path: String) = viewModelScope.launch(Dispatchers.IO) {
+        preferenceRepository.setNotesRootDirectory(path)
+    }
 
     fun <T> setPreference(pref: T) where T : Enum<T>, T : EnumPreference {
         when (pref) {

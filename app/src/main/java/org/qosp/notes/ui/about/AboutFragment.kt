@@ -26,7 +26,7 @@ class AboutFragment : BaseFragment(resId = R.layout.fragment_about) {
     override val toolbarTitle: String
         get() = getString(R.string.nav_about)
 
-    val markwon: Markwon by inject()
+    val markwon: Markwon by inject { org.koin.core.parameter.parametersOf({ null }) }
 
     private fun launchUrl(url: String) {
         val intent = Intent(Intent.ACTION_VIEW)

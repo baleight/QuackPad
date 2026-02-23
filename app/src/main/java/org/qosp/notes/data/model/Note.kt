@@ -16,9 +16,9 @@ import java.time.Instant
     foreignKeys = [
         ForeignKey(
             onDelete = ForeignKey.SET_NULL,
-            entity = Notebook::class,
+            entity = FolderEntity::class,
             parentColumns = ["id"],
-            childColumns = ["notebookId"]
+            childColumns = ["folderId"]
         ),
     ]
 )
@@ -42,7 +42,11 @@ data class NoteEntity(
     val attachments: List<Attachment>,
     val color: NoteColor,
     @ColumnInfo(index = true)
-    val notebookId: Long?,
+    val folderId: Long?,
+    /** Absolute path of the corresponding .md file on the filesystem, or null if not yet written to disk. */
+    val filePath: String?,
+    val eventDate: Long?,
+    val priority: NotePriority,
     @PrimaryKey(autoGenerate = true)
     val id: Long,
 )
@@ -67,7 +71,11 @@ data class Note(
     val deletionDate: Long? = null,
     val attachments: List<Attachment> = listOf(),
     val color: NoteColor = NoteColor.Default,
-    val notebookId: Long? = null,
+    val folderId: Long? = null,
+    /** Absolute path of the corresponding .md file on the filesystem, or null. */
+    val filePath: String? = null,
+    val eventDate: Long? = null,
+    val priority: NotePriority = NotePriority.NONE,
     val id: Long = 0L,
     @Relation(
         entity = Tag::class,
@@ -160,7 +168,10 @@ data class Note(
         deletionDate = deletionDate,
         attachments = attachments,
         color = color,
-        notebookId = notebookId,
+        folderId = folderId,
+        filePath = filePath,
+        eventDate = eventDate,
+        priority = priority,
         id = id
     )
 }

@@ -4,10 +4,10 @@ import android.os.Parcelable
 import kotlinx.parcelize.Parcelize
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import org.qosp.notes.data.model.FolderEntity
 import org.qosp.notes.data.model.IdMapping
 import org.qosp.notes.data.model.Note
 import org.qosp.notes.data.model.NoteTagJoin
-import org.qosp.notes.data.model.Notebook
 import org.qosp.notes.data.model.Reminder
 import org.qosp.notes.data.model.Tag
 
@@ -16,7 +16,7 @@ import org.qosp.notes.data.model.Tag
 data class Backup(
     val version: Int,
     val notes: Set<Note> = setOf(),
-    val notebooks: Set<Notebook> = setOf(),
+    val folders: Set<FolderEntity> = setOf(),
     val reminders: Set<Reminder> = setOf(),
     val tags: Set<Tag> = setOf(),
     val joins: Set<NoteTagJoin> = setOf(),

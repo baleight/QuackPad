@@ -5,17 +5,18 @@ import android.net.Uri
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import org.qosp.notes.App
+import org.qosp.notes.components.ImageStorageManager
 import org.qosp.notes.data.Backup
 import org.qosp.notes.data.model.Attachment
+import org.qosp.notes.data.model.FolderEntity
 import org.qosp.notes.data.model.IdMapping
 import org.qosp.notes.data.model.Note
 import org.qosp.notes.data.model.NoteTagJoin
-import org.qosp.notes.data.model.Notebook
 import org.qosp.notes.data.model.Reminder
 import org.qosp.notes.data.model.Tag
+import org.qosp.notes.data.repo.FolderRepository
 import org.qosp.notes.data.repo.IdMappingRepository
 import org.qosp.notes.data.repo.NoteRepository
-import org.qosp.notes.data.repo.NotebookRepository
 import org.qosp.notes.data.repo.ReminderRepository
 import org.qosp.notes.data.repo.TagRepository
 import org.qosp.notes.ui.attachments.getAttachmentUri
@@ -32,11 +33,12 @@ import java.util.zip.ZipOutputStream
 class BackupManager(
     private val currentVersion: Int,
     private val noteRepository: NoteRepository,
-    private val notebookRepository: NotebookRepository,
+    private val folderRepository: FolderRepository,
     private val tagRepository: TagRepository,
     private val reminderRepository: ReminderRepository,
     private val idMappingRepository: IdMappingRepository,
     private val reminderManager: ReminderManager,
+    private val imageStorageManager: ImageStorageManager,
     private val context: Context,
 ) {
     private val BUFFER = 2048
@@ -53,16 +55,16 @@ class BackupManager(
             .first()
             .toSet()
 
-        val notebooks = mutableSetOf<Notebook>()
+        val folders = mutableSetOf<FolderEntity>()
         val reminders = mutableSetOf<Reminder>()
         val tags = mutableSetOf<Tag>()
         val joins = mutableSetOf<NoteTagJoin>()
         val idMappings = mutableSetOf<IdMapping>()
 
         val newNotes = notes.map { note ->
-            note.notebookId?.let { notebookId ->
-                val notebook = notebookRepository.getById(notebookId).first() ?: return@let
-                notebooks.add(notebook)
+            note.folderId?.let { folderId ->
+                val folder = folderRepository.getFolderById(folderId).first() ?: return@let
+                folders.add(folder)
             }
 
             val noteReminders = reminderRepository.getByNoteId(note.id).first()
@@ -86,20 +88,20 @@ class BackupManager(
             note.copy(attachments = newAttachments)
         }
 
-        return Backup(currentVersion, newNotes.toSet(), notebooks, reminders, tags, joins, idMappings)
+        return Backup(currentVersion, newNotes.toSet(), folders, reminders, tags, joins, idMappings)
     }
 
     suspend fun restoreNotesFromBackup(backup: Backup) {
-        val notebooksMap = mutableMapOf<Long, Long>()
+        val foldersMap = mutableMapOf<Long, Long>()
         val tagsMap = mutableMapOf<Long, Long>()
         val notesMap = mutableMapOf<Long, Long>()
 
-        backup.notebooks.forEach { notebook ->
-            val existingNotebook = notebookRepository.getByName(notebook.name).firstOrNull()
-            if (existingNotebook != null) {
-                notebooksMap[notebook.id] = existingNotebook.id
+        backup.folders.forEach { folder ->
+            val existingFolder = folderRepository.getFolderByPath(folder.absolutePath)
+            if (existingFolder != null) {
+                foldersMap[folder.id] = existingFolder.id
             } else {
-                notebooksMap[notebook.id] = notebookRepository.insert(notebook.copy(id = 0L))
+                foldersMap[folder.id] = folderRepository.insertFolder(folder.copy(id = 0L))
             }
         }
 
@@ -115,7 +117,7 @@ class BackupManager(
         backup.notes.forEach { note ->
             val newNote = note.copy(
                 id = 0L,
-                notebookId = notebooksMap[note.notebookId],
+                folderId = foldersMap[note.folderId],
                 attachments = note.attachments.map { attachment ->
                     if (attachment.fileName.isNotEmpty()) {
                         attachment.copy(
@@ -161,7 +163,8 @@ class BackupManager(
         migrationHandler: MigrationHandler,
     ): Result<Backup> = runCatching {
         var backup: Backup? = null
-        val nameMap = mutableMapOf<String, String>()
+        val nameMap = mutableMapOf<String, String>()       // legacy media name remapping
+        val imageNameMap = mutableMapOf<String, String>()  // inline-image name remapping
 
         ZipInputStream(BufferedInputStream(context.contentResolver.openInputStream(uri))).use { input ->
             while (true) {
@@ -181,12 +184,28 @@ class BackupManager(
                     }
 
                     "${App.MEDIA_FOLDER}/" -> {
-                        // Ignore directory
+                        // Ignore legacy media directory entry
                         continue
                     }
 
-                    // Copy media files to local storage
-                    else -> {
+                    // Restore inline images to local images folder
+                    else -> if (entry.name.startsWith("${ImageStorageManager.IMAGES_FOLDER}/")) {
+                        val originalName = entry.name.removePrefix("${ImageStorageManager.IMAGES_FOLDER}/")
+                        if (originalName.isEmpty()) { continue }
+                        val destFile = uniqueFile(imageStorageManager.imagesDir, originalName)
+                        FileOutputStream(destFile).use { out ->
+                            val buffer = ByteArray(BUFFER)
+                            var length = 0
+                            while (input.read(buffer).also { length = it } > 0) {
+                                out.write(buffer, 0, length)
+                            }
+                        }
+                        if (destFile.name != originalName) {
+                            imageNameMap[originalName] = destFile.name
+                        }
+                        input.closeEntry()
+                    } else {
+                        // Legacy: copy media files to old media storage
                         val dir = File(context.filesDir, App.MEDIA_FOLDER).also { it.mkdirs() }
 
                         var fileId = 1
@@ -219,17 +238,27 @@ class BackupManager(
         }
 
         backup.run {
-            if (this == null || nameMap.isEmpty()) return@run this
-            val newNotes = notes
-                .map { note ->
-                    val newAttachments = note.attachments.map { attachment ->
-                        attachment.copy(fileName = nameMap[attachment.fileName] ?: attachment.fileName)
-                    }
-                    note.copy(attachments = newAttachments)
-                }
-                .toSet()
+            if (this == null) throw IOException()
 
-            copy(notes = newNotes)
+            // Rewrite attachment filenames for legacy media entries
+            val withAttachments = if (nameMap.isEmpty()) this else {
+                copy(notes = notes.map { note ->
+                    note.copy(attachments = note.attachments.map { attachment ->
+                        attachment.copy(fileName = nameMap[attachment.fileName] ?: attachment.fileName)
+                    })
+                }.toSet())
+            }
+
+            // Rewrite inline image paths for newly restored images
+            if (imageNameMap.isEmpty()) withAttachments else {
+                withAttachments.copy(notes = withAttachments.notes.map { note ->
+                    var content = note.content
+                    imageNameMap.forEach { (oldName, newName) ->
+                        content = content.replace(oldName, newName)
+                    }
+                    note.copy(content = content)
+                }.toSet())
+            }
         } ?: throw IOException()
     }
 
@@ -238,28 +267,53 @@ class BackupManager(
         handler: AttachmentHandler,
         uri: Uri,
         progressHandler: ProgressHandler,
+        inlineImagePaths: List<String> = emptyList(),
     ) {
         runCatching {
             ZipOutputStream(BufferedOutputStream(context.contentResolver.openOutputStream(uri))).use { out ->
                 var current = 0
-                var max = 1
 
+                // Export legacy attachment files
                 if (handler is AttachmentHandler.IncludeFiles) {
                     val attachments = handler.attachmentsMap
-                    max = attachments.size + 1
+                    val max = attachments.size + inlineImagePaths.size + 1
 
                     if (attachments.isNotEmpty()) out.putNextEntry(ZipEntry("${App.MEDIA_FOLDER}/"))
                     for ((fileName, inputUri) in attachments) {
                         progressHandler.onProgressChanged(++current, max)
-
                         out.putNextEntry(ZipEntry("${App.MEDIA_FOLDER}/$fileName"))
                         context.contentResolver.openInputStream(inputUri)?.use { input ->
                             input.copyTo(out, BUFFER)
                         }
                     }
+
+                    // Export inline image files
+                    if (inlineImagePaths.isNotEmpty()) {
+                        out.putNextEntry(ZipEntry("${ImageStorageManager.IMAGES_FOLDER}/"))
+                    }
+                    for (path in inlineImagePaths) {
+                        val file = File(path)
+                        if (!file.exists()) continue
+                        progressHandler.onProgressChanged(++current, max)
+                        out.putNextEntry(ZipEntry("${ImageStorageManager.IMAGES_FOLDER}/${file.name}"))
+                        file.inputStream().use { it.copyTo(out, BUFFER) }
+                    }
+                } else {
+                    val max = inlineImagePaths.size + 1
+                    // Even without legacy attachment handler, export inline images
+                    if (inlineImagePaths.isNotEmpty()) {
+                        out.putNextEntry(ZipEntry("${ImageStorageManager.IMAGES_FOLDER}/"))
+                    }
+                    for (path in inlineImagePaths) {
+                        val file = File(path)
+                        if (!file.exists()) continue
+                        progressHandler.onProgressChanged(++current, max)
+                        out.putNextEntry(ZipEntry("${ImageStorageManager.IMAGES_FOLDER}/${file.name}"))
+                        file.inputStream().use { it.copyTo(out, BUFFER) }
+                    }
                 }
 
-                progressHandler.onProgressChanged(++current, max)
+                progressHandler.onProgressChanged(++current, Int.MAX_VALUE)
                 out.putNextEntry(ZipEntry("backup.json"))
                 out.write(noteJson.toByteArray())
                 out.finish()
@@ -268,5 +322,18 @@ class BackupManager(
             onSuccess = { progressHandler.onCompletion() },
             onFailure = { progressHandler.onFailure(it) }
         )
+    }
+
+    /** Returns a [File] in [dir] with a name that does not yet exist, appending a counter if needed. */
+    private fun uniqueFile(dir: File, desiredName: String): File {
+        val base = desiredName.substringBeforeLast(".")
+        val ext  = desiredName.substringAfterLast(".", "")
+        var candidate = File(dir, desiredName)
+        var counter = 1
+        while (candidate.exists()) {
+            candidate = File(dir, if (ext.isEmpty()) "${base}_$counter" else "${base}_$counter.$ext")
+            counter++
+        }
+        return candidate
     }
 }

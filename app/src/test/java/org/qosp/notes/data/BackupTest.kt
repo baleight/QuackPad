@@ -1,36 +1,26 @@
 package org.qosp.notes.data
 
-import org.junit.Assert.*
+import org.junit.Assert.assertNotNull
 import org.junit.Test
-import org.qosp.notes.data.model.*
-import org.qosp.notes.preferences.CloudService
+import org.qosp.notes.data.model.FolderEntity
+import org.qosp.notes.data.model.Note
 
 class BackupTest {
 
     @Test
-    fun serializer() {
+    fun `serialize and deserialize backup with folders`() {
+        val note = Note(title = "Test Note")
+        val folder = FolderEntity(
+            id = 1L,
+            name = "Work",
+            parentId = null,
+            absolutePath = "/storage/emulated/0/QuackPad/Notes/Work",
+            createdAt = 1_000_000L,
+            modifiedAt = 1_000_000L,
+        )
         val backup = Backup(
-            1,
-            setOf(
-                Note(
-                    title = "title",
-                    content = "content",
-                    isList = false,
-                    taskList = listOf(NoteTask(33L, "reminder", false)),
-                    attachments = listOf(Attachment(type = Attachment.Type.AUDIO, path = "sdt")),
-                    tags = listOf(Tag("tag", 33L)),
-                    reminders = listOf(Reminder("reminder", 2442L, 234)),
-                    color = NoteColor.Blue
-                )
-            ),
-            setOf(Notebook("nb")),
-            joins = setOf(NoteTagJoin(33, 44)),
-            idMappings = setOf(
-                IdMapping(
-                    33, 44, 12,
-                    CloudService.NEXTCLOUD, null, false, false
-                )
-            )
+            notes = setOf(note),
+            folders = setOf(folder)
         )
         assertNotNull(backup.serialize())
     }

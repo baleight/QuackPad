@@ -6,6 +6,7 @@ import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.module
 import org.qosp.notes.App
 import org.qosp.notes.BuildConfig
+import org.qosp.notes.components.ImageStorageManager
 import org.qosp.notes.components.MediaStorageManager
 import org.qosp.notes.components.backup.BackupManager
 import org.qosp.notes.components.workers.BinCleaningWorker
@@ -22,6 +23,8 @@ object UtilModule {
         workerOf(::BinCleaningWorker)
         workerOf(::SyncWorker)
 
+        single { ImageStorageManager(context = androidContext()) }
+
         single {
             MediaStorageManager(
                 context = androidContext(),
@@ -34,11 +37,12 @@ object UtilModule {
             BackupManager(
                 BuildConfig.VERSION_CODE,
                 noteRepository = get(),
-                notebookRepository = get(),
+                folderRepository = get(),
                 tagRepository = get(),
                 reminderRepository = get(),
                 idMappingRepository = get(),
                 reminderManager = get(),
+                imageStorageManager = get(),
                 context = androidContext(),
             )
         }

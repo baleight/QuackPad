@@ -195,6 +195,25 @@ class NoteViewHolder(
         }
     }
 
+    private fun updatePriority(note: Note) = with(binding) {
+        val (colorStr, emoji) = when (note.priority) {
+            org.qosp.notes.data.model.NotePriority.HIGH -> "#F44336" to "🔴"
+            org.qosp.notes.data.model.NotePriority.MEDIUM -> "#FFC107" to "🟡"
+            org.qosp.notes.data.model.NotePriority.LOW -> "#4CAF50" to "🟢"
+            else -> "#00000000" to null
+        }
+
+        if (emoji != null) {
+            priorityBadge.text = emoji
+            priorityBadge.isVisible = true
+            priorityBorder.isVisible = true
+            priorityBorder.setBackgroundColor(android.graphics.Color.parseColor(colorStr))
+        } else {
+            priorityBadge.isVisible = false
+            priorityBorder.isVisible = false
+        }
+    }
+
     fun bind(note: Note) {
         setTextContent(note)
         setTasks(note, useDiff = false)
@@ -203,6 +222,7 @@ class NoteViewHolder(
         updateIndicatorIcons(note, note.reminders.isNotEmpty())
         updateTags(note.tags)
         setupAttachments(note)
+        updatePriority(note)
 
         ViewCompat.setTransitionName(binding.root, "editor_${note.id}")
     }
